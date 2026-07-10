@@ -2,5 +2,5 @@
   <Project Path="../Classe-outils-topsolid/Classe outils topsolid/OutilsTs.csproj">
     <Platform Project="x64" />
   </Project>
-  <Project Path="JBTExport/JBTExport.csproj" />
+  <Project Path="JBTExport/JBTPrint.csproj" Id="bcca2920-167f-486d-862d-ccdde3b41a33" />
 </Solution>
