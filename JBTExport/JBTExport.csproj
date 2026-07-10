@@ -12,9 +12,11 @@
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
+    <PlatformTarget>x64</PlatformTarget>
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
@@ -41,6 +43,9 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
+    <Reference Include="TopSolid.Kernel.Automating, Version=7.20.400.80, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\TopSolid.Kernel.Automating.7.20.400.80\lib\net48\TopSolid.Kernel.Automating.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
@@ -48,6 +53,20 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Classe-outils-topsolid\Classe outils topsolid\OutilsTs.csproj">
+      <Project>{e2d81e73-a4dc-47bb-bc93-acbebde63f1d}</Project>
+      <Name>OutilsTs</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Import Project="..\packages\TopSolid.Kernel.Automating.7.20.400.80\build\TopSolid.Kernel.Automating.targets" Condition="Exists('..\packages\TopSolid.Kernel.Automating.7.20.400.80\build\TopSolid.Kernel.Automating.targets')" />
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>Ce projet fait référence à des packages NuGet qui sont manquants sur cet ordinateur. Utilisez l'option de restauration des packages NuGet pour les télécharger. Pour plus d'informations, consultez http://go.microsoft.com/fwlink/?LinkID=322105. Le fichier manquant est : {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\TopSolid.Kernel.Automating.7.20.400.80\build\TopSolid.Kernel.Automating.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\TopSolid.Kernel.Automating.7.20.400.80\build\TopSolid.Kernel.Automating.targets'))" />
+  </Target>
 </Project>

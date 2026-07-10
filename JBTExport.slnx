@@ -1,3 +1,6 @@
 <Solution>
+  <Project Path="../Classe-outils-topsolid/Classe outils topsolid/OutilsTs.csproj">
+    <Platform Project="x64" />
+  </Project>
   <Project Path="JBTExport/JBTExport.csproj" />
 </Solution>
