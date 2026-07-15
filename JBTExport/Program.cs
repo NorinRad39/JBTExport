@@ -1,0 +1,186 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using TopSolid.Kernel.Automating;
+using TSH = TopSolid.Kernel.Automating.TopSolidHost;
+using OutilsTs;
+using System.IO;
+using System.Windows.Forms;
+using System.Diagnostics;
+
+
+namespace JBTExport
+{
+    internal class Program
+    {
+        [STAThread]
+        static void Main(string[] args)
+        {
+            string dossierConfig = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "JBTExport");
+            string fichierConfig = Path.Combine(dossierConfig, "config.txt");
+            string path = string.Empty;
+
+            try
+            {
+                // 1. On s'assure que le dossier de config existe
+                if (!Directory.Exists(dossierConfig))
+                {
+                    Directory.CreateDirectory(dossierConfig);
+                }
+
+                // 2. Si le fichier existe déjà, on tente de lire le chemin
+                if (File.Exists(fichierConfig))
+                {
+                    path = File.ReadAllText(fichierConfig).Trim();
+                }
+
+                // 3. Si le chemin est vide ou n'existe pas physiquement sur le disque
+                if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+                {
+                    MessageBox.Show(
+                        "Aucun dossier d'exportation valide n'est configuré.\n\nVeuillez sélectionner le dossier d'exportation par défaut dans la fenêtre qui va suivre.",
+                        "Configuration du chemin d'export",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information
+                    );
+
+                    // 🔑 Utilisation de FolderBrowserDialog pour ouvrir l'explorateur Windows
+                    using (var fbd = new FolderBrowserDialog())
+                    {
+                        fbd.Description = "Sélectionnez le dossier d'exportation par défaut pour JBT-Export";
+                        fbd.ShowNewFolderButton = true; // Permet de créer un dossier à la volée
+
+                        if (fbd.ShowDialog() == DialogResult.OK)
+                        {
+                            path = fbd.SelectedPath;
+
+                            // On sauvegarde directement le choix propre de l'utilisateur dans le fichier texte
+                            File.WriteAllText(fichierConfig, path);
+
+                            MessageBox.Show(
+                                $"Configuration enregistrée avec succès !\n\nChemin sauvegardé :\n{path}",
+                                "Configuration réussie",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Information
+                            );
+                        }
+                        else
+                        {
+                            // Si l'utilisateur clique sur "Annuler", on ne peut pas continuer
+                            MessageBox.Show(
+                                "L'exportation a été annulée car aucun dossier n'a été sélectionné.",
+                                "Export annulé",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Warning
+                            );
+                            return;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Erreur lors de la configuration du chemin : {ex.Message}", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            // Sécurité pour s'assurer que le chemin d'export se termine bien par un '\'
+            if (!path.EndsWith("\\"))
+            {
+                path += "\\";
+            }
+
+            Console.WriteLine($"Le chemin d'exportation utilisé est : {path}");
+
+            var connector = new StartConnect();
+            connector.ConnectionTopsolid();
+
+            if(TSH.IsConnected)
+            {
+                Console.WriteLine("Connecté à TopSolid.");
+            }
+            else
+            {
+                MessageBox.Show("Échec de la connexion à TopSolid.", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            var currentDoc = new Document();
+
+            if(currentDoc == null || currentDoc.DocId == DocumentId.Empty)
+            {
+                MessageBox.Show("Aucun document ouvert dans TopSolid.", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            var currentProjetName = PDM.GetCurrentProjectName();
+
+            var indice = TrouverIndiceRecurssif(currentDoc.DocPdmObject, currentProjetName);
+
+            Console.WriteLine(path + currentProjetName + "\\Ind " + indice+"\\" + currentDoc.DocNomTxt + ".jbt");
+
+            try
+            {
+                // 1. On calcule le chemin du dossier cible final
+                string dossierExportCible = Path.Combine(path, currentProjetName, "Ind " + indice);
+
+                // 2. 🔑 On s'assure que le dossier de destination existe physiquement
+                if (!Directory.Exists(dossierExportCible))
+                {
+                    Directory.CreateDirectory(dossierExportCible);
+                    Console.WriteLine($"Dossier créé : {dossierExportCible}");
+                }
+
+                // 3. On s'assure que le chemin se termine par un anti-slash pour la méthode d'export
+                string cheminExportFinal = dossierExportCible + "\\";
+
+                // 4. On lance l'exportation
+                Export.ExportDocId(currentDoc.DocId, cheminExportFinal, currentDoc.DocNomTxt, ".jbt");
+                MessageBox.Show("Export terminé avec succès.", "Succès", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (ArgumentException ex)
+            {
+                MessageBox.Show($"Paramètre invalide pour l'export : {ex.Message}", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            catch (InvalidOperationException ex)
+            {
+                MessageBox.Show($"État invalide pour l'export : {ex.Message}", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Erreur inattendue pendant l'export : {ex.Message}", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+
+            TSH.Disconnect();
+            Application.Exit();
+
+        }
+
+        private static string TrouverIndiceRecurssif(PdmObjectId elementId, string projectName)
+        {
+            if (elementId.IsEmpty) return string.Empty;
+
+            PdmObjectId parentId = TSH.Pdm.GetOwner(elementId);
+            if (parentId.IsEmpty) return string.Empty;
+
+            string parentName = TSH.Pdm.GetName(parentId);
+
+            // Condition d'arrêt 1 : On est remonté jusqu'au projet sans trouver d'indice
+            if (string.Equals(parentName, projectName, StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Empty;
+            }
+
+            // Condition d'arrêt 2 : On a trouvé le dossier Indice
+            if (parentName.StartsWith("Ind", StringComparison.OrdinalIgnoreCase))
+            {
+                return parentName.Substring("Ind".Length).Trim();
+            }
+
+            // Appel récursif : On relance la recherche sur le parent
+            return TrouverIndiceRecurssif(parentId, projectName);
+        }
+    }
+}
