@@ -22,33 +22,29 @@ namespace JBTExport
                 Console.WriteLine("TSH is connected");
             }
 
-            FindExporterIndexByExtension("Pdf", out int exporterIndex);
+            Export.FindExporterIndexByExtension("Pdf", out int exporterIndex);
             Console.WriteLine($"Exporter index for PDF: {exporterIndex}");
-            List<KeyValue> options = TSH.Application.GetExporterOptions(exporterIndex);
-            foreach (KeyValue kv in options)
-            {
-                Console.WriteLine($"Option: {kv.Key} = {kv.Value}");
-            }
+            Export.ExportCurrent(@"C:\Export", "piece", "pdf");
         }
 
-            private static bool FindExporterIndexByExtension(string extension, out int exporterIndex)
-            {
-                exporterIndex = -1;
+            //private static bool FindExporterIndexByExtension(string extension, out int exporterIndex)
+            //{
+            //    exporterIndex = -1;
 
-                for (int i = 0; i < TSH.Application.ExporterCount; i++)
-                {
-                    TSH.Application.GetExporterFileType(i, out string fileTypeName, out string[] outFileExtensions);
+            //    for (int i = 0; i < TSH.Application.ExporterCount; i++)
+            //    {
+            //        TSH.Application.GetExporterFileType(i, out string fileTypeName, out string[] outFileExtensions);
 
-                    // Vérifier si l'extension existe dans le tableau
-                    if (outFileExtensions != null && outFileExtensions.Any(ext => ext.TrimStart('.').Equals(extension, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        exporterIndex = i;
-                        return true;
-                    }
-                }
+            //        // Vérifier si l'extension existe dans le tableau
+            //        if (outFileExtensions != null && outFileExtensions.Any(ext => ext.TrimStart('.').Equals(extension, StringComparison.OrdinalIgnoreCase)))
+            //        {
+            //            exporterIndex = i;
+            //            return true;
+            //        }
+            //    }
 
-                return false;
-            }
+            //    return false;
+            //}
 
     }
 
