@@ -225,7 +225,7 @@ namespace JBTExport
                 // 1. On calcule le chemin du dossier cible final
                 string dossierExportCible = Path.Combine(path, currentProjetName, indiceOwnerName, "Ind " + indice);
 
-                // 2. 🔑 On s'assure que le dossier de destination existe physiquement
+                // 2. On s'assure que le dossier de destination existe physiquement
                 if (!Directory.Exists(dossierExportCible))
                 {
                     Directory.CreateDirectory(dossierExportCible);
@@ -235,8 +235,25 @@ namespace JBTExport
                 // 3. On s'assure que le chemin se termine par un anti-slash pour la méthode d'export
                 string cheminExportFinal = dossierExportCible + "\\";
 
-                // 4. On lance l'exportation
+                // 4. On lance l'exportation (génère directement ton .jbt)
                 Export.ExportDocId(currentDoc.DocId, cheminExportFinal, currentDoc.DocNomTxt, ".jbt");
+
+                // ==========================================
+                // 🔑 5. AJOUT DE LA GÉNÉRATION DES SIGNETS DIRECTEMENT SUR LE .JBT
+                // ==========================================
+                string fichierJbtExistant = Path.Combine(dossierExportCible, currentDoc.DocNomTxt + ".jbt");
+
+                if (File.Exists(fichierJbtExistant))
+                {
+                    // On envoie le fichier .jbt directement à notre traitement
+                    Signets.CreerSignetsNavigables(fichierJbtExistant, currentDoc.DocNomTxt);
+                }
+                else
+                {
+                    Console.WriteLine($"[Signets] Impossible de trouver le fichier exporté : {fichierJbtExistant}");
+                }
+                // ==========================================
+
                 MessageBox.Show("Export terminé avec succès.", "Succès", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (ArgumentException ex)
