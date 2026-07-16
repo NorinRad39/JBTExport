@@ -11,7 +11,7 @@ using System.Windows.Forms;
 using System.Diagnostics;
 using System.Deployment.Application;
 using System.Runtime.InteropServices;
-using System.Text;
+
 
 
 namespace JBTExport
@@ -215,15 +215,15 @@ namespace JBTExport
             }
 
             var currentProjetName = PDM.GetCurrentProjectName();
-
-            var indice = TrouverIndiceRecurssif(currentDoc.DocPdmObject, currentProjetName);
+            string indiceOwnerName = string.Empty;
+            var indice = TrouverIndiceRecurssif(currentDoc.DocPdmObject, currentProjetName, out indiceOwnerName);
 
             Console.WriteLine(path + currentProjetName + "\\Ind " + indice+"\\" + currentDoc.DocNomTxt + ".jbt");
 
             try
             {
                 // 1. On calcule le chemin du dossier cible final
-                string dossierExportCible = Path.Combine(path, currentProjetName, "Ind " + indice);
+                string dossierExportCible = Path.Combine(path, currentProjetName, indiceOwnerName, "Ind " + indice);
 
                 // 2. 🔑 On s'assure que le dossier de destination existe physiquement
                 if (!Directory.Exists(dossierExportCible))
@@ -257,8 +257,10 @@ namespace JBTExport
 
         }
 
-        private static string TrouverIndiceRecurssif(PdmObjectId elementId, string projectName)
+        private static string TrouverIndiceRecurssif(PdmObjectId elementId, string projectName , out string indiceOwnerName)
         {
+            indiceOwnerName = string.Empty;
+
             if (elementId.IsEmpty) return string.Empty;
 
             PdmObjectId parentId = TSH.Pdm.GetOwner(elementId);
@@ -275,11 +277,13 @@ namespace JBTExport
             // Condition d'arrêt 2 : On a trouvé le dossier Indice
             if (parentName.StartsWith("Ind", StringComparison.OrdinalIgnoreCase))
             {
+                var indiceOwner = TSH.Pdm.GetOwner(parentId);
+                indiceOwnerName = TSH.Pdm.GetName(indiceOwner);
                 return parentName.Substring("Ind".Length).Trim();
             }
 
             // Appel récursif : On relance la recherche sur le parent
-            return TrouverIndiceRecurssif(parentId, projectName);
+            return TrouverIndiceRecurssif(parentId, projectName, out indiceOwnerName);
         }
 
         // Import de l'API Windows pour résoudre les chemins réseau
