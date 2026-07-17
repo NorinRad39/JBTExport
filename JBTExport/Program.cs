@@ -216,14 +216,12 @@ namespace JBTExport
 
             var currentProjetName = PDM.GetCurrentProjectName();
             string indiceOwnerName = string.Empty;
-            var indice = TrouverIndiceRecurssif(currentDoc.DocPdmObject, currentProjetName, out indiceOwnerName);
-
-            Console.WriteLine(path + currentProjetName + "\\Ind " + indice+"\\" + currentDoc.DocNomTxt + ".jbt");
+            string dossierFinalName = TrouverIndiceRecurssif(currentDoc.DocPdmObject, currentProjetName, out indiceOwnerName);
 
             try
             {
                 // 1. On calcule le chemin du dossier cible final
-                string dossierExportCible = Path.Combine(path, currentProjetName, indiceOwnerName, "Ind " + indice);
+                string dossierExportCible = Path.Combine(path, currentProjetName, indiceOwnerName, dossierFinalName);
 
                 // 2. On s'assure que le dossier de destination existe physiquement
                 if (!Directory.Exists(dossierExportCible))
@@ -274,7 +272,7 @@ namespace JBTExport
 
         }
 
-        private static string TrouverIndiceRecurssif(PdmObjectId elementId, string projectName , out string indiceOwnerName)
+        private static string TrouverIndiceRecurssif(PdmObjectId elementId, string projectName, out string indiceOwnerName, PdmObjectId premierParentId = default(PdmObjectId), string premierParentName = null)
         {
             indiceOwnerName = string.Empty;
 
@@ -285,22 +283,35 @@ namespace JBTExport
 
             string parentName = TSH.Pdm.GetName(parentId);
 
-            // Condition d'arrêt 1 : On est remonté jusqu'au projet sans trouver d'indice
-            if (string.Equals(parentName, projectName, StringComparison.OrdinalIgnoreCase))
+            if (premierParentId.IsEmpty)
             {
-                return string.Empty;
+                premierParentId = parentId;
+                premierParentName = parentName;
             }
 
-            // Condition d'arrêt 2 : On a trouvé le dossier Indice
+            // Condition d'arrêt 1 : On a trouvé un dossier Ind
             if (parentName.StartsWith("Ind", StringComparison.OrdinalIgnoreCase))
             {
                 var indiceOwner = TSH.Pdm.GetOwner(parentId);
-                indiceOwnerName = TSH.Pdm.GetName(indiceOwner);
-                return parentName.Substring("Ind".Length).Trim();
+                indiceOwnerName = indiceOwner.IsEmpty ? projectName : TSH.Pdm.GetName(indiceOwner);
+                return parentName;
+            }
+
+            // Condition d'arrêt 2 : On est remonté jusqu'au projet sans trouver de dossier Ind
+            if (string.Equals(parentName, projectName, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!premierParentId.IsEmpty)
+                {
+                    PdmObjectId ownerPremierParentId = TSH.Pdm.GetOwner(premierParentId);
+                    indiceOwnerName = ownerPremierParentId.IsEmpty ? projectName : TSH.Pdm.GetName(ownerPremierParentId);
+                    return premierParentName ?? string.Empty;
+                }
+
+                return string.Empty;
             }
 
             // Appel récursif : On relance la recherche sur le parent
-            return TrouverIndiceRecurssif(parentId, projectName, out indiceOwnerName);
+            return TrouverIndiceRecurssif(parentId, projectName, out indiceOwnerName, premierParentId, premierParentName);
         }
 
         // Import de l'API Windows pour résoudre les chemins réseau
