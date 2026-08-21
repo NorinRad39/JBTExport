@@ -221,7 +221,9 @@ namespace JBTExport
             try
             {
                 // 1. On calcule le chemin du dossier cible final
-                string dossierExportCible = Path.Combine(path, currentProjetName, indiceOwnerName, dossierFinalName);
+                string dossierExportCible = string.IsNullOrWhiteSpace(indiceOwnerName)
+                    ? Path.Combine(path, currentProjetName, dossierFinalName)
+                    : Path.Combine(path, currentProjetName, indiceOwnerName, dossierFinalName);
 
                 // 2. On s'assure que le dossier de destination existe physiquement
                 if (!Directory.Exists(dossierExportCible))
@@ -302,8 +304,8 @@ namespace JBTExport
             {
                 if (!premierParentId.IsEmpty)
                 {
-                    PdmObjectId ownerPremierParentId = TSH.Pdm.GetOwner(premierParentId);
-                    indiceOwnerName = ownerPremierParentId.IsEmpty ? projectName : TSH.Pdm.GetName(ownerPremierParentId);
+                    // Pas de dossier Ind trouvé => on n'ajoute pas de niveau intermédiaire
+                    indiceOwnerName = string.Empty;
                     return premierParentName ?? string.Empty;
                 }
 
