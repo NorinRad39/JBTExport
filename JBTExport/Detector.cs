@@ -52,10 +52,10 @@ namespace JBTExport
                     float textY = baseline.GetStartPoint().Get(1);
 
                     // Zone centrale (50% du milieu)
-                    float minX = _pageSize.GetWidth() * 0.25f;
-                    float maxX = _pageSize.GetWidth() * 0.75f;
-                    float minY = _pageSize.GetHeight() * 0.25f;
-                    float maxY = _pageSize.GetHeight() * 0.75f;
+                    float minX = _pageSize.GetWidth() * 0.15f;
+                    float maxX = _pageSize.GetWidth() * 0.85f;
+                    float minY = _pageSize.GetHeight() * 0.38f;
+                    float maxY = _pageSize.GetHeight() * 0.62f;
 
                     if (textX >= minX && textX <= maxX && textY >= minY && textY <= maxY)
                     {
