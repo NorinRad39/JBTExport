@@ -46,18 +46,15 @@ namespace JBTExport
                 float fontSize = renderInfo.GetFontSize();
                 if (fontSize >= 28.3f)
                 {
-                    // 3. Vérification de la position (au centre de la page)
+                    // 3. Vérification de la position (hauteur uniquement)
                     LineSegment baseline = renderInfo.GetBaseline();
-                    float textX = baseline.GetStartPoint().Get(0);
                     float textY = baseline.GetStartPoint().Get(1);
 
-                    // Zone centrale (50% du milieu)
-                    float minX = _pageSize.GetWidth() * 0.15f;
-                    float maxX = _pageSize.GetWidth() * 0.85f;
+                    // Bande centrale verticale : toute la largeur de la page
                     float minY = _pageSize.GetHeight() * 0.38f;
                     float maxY = _pageSize.GetHeight() * 0.62f;
 
-                    if (textX >= minX && textX <= maxX && textY >= minY && textY <= maxY)
+                    if (textY >= minY && textY <= maxY)
                     {
                         FoundOps.Add(text.Trim());
                     }

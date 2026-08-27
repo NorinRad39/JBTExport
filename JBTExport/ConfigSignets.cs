@@ -8,9 +8,9 @@ namespace JBTExport
         public static readonly List<string> MotsClesCentraux = new List<string>
         {
             "OP",
-            "PLAN DE PLONGEE",
-            "PREPA BRUT",
-            "USINAGE"
+            "Plan de plongée",
+            "Prépa brut",
+            "Usinage"
         };
 
         // d'autres listes ici si besoin plus tard
