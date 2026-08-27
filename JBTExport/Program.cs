@@ -25,6 +25,10 @@ namespace JBTExport
             string fichierConfig = Path.Combine(dossierConfig, "config.txt");
             string path = string.Empty;
 
+            // MSIX n'installe que l'entrée du menu Démarrer : le raccourci du bureau, l'application
+            // doit se le poser elle-même, une seule fois.
+            RaccourciBureau.CreerSiAbsent("JBTExport", dossierConfig);
+
             if (ApplicationDeployment.IsNetworkDeployed)
             {
                 var ad = ApplicationDeployment.CurrentDeployment;
