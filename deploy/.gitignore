@@ -1,0 +1,7 @@
+# Setups produits par ISCC
+Output/
+
+# Clé privée de signature : elle ne va pas dans le dépôt, même privé.
+# Le .cer, lui, est versionné : c'est la partie publique, et le setup en a besoin
+# pour se déposer dans le magasin TrustedPublisher des postes.
+*.pfx

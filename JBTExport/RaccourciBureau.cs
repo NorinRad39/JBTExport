@@ -2,37 +2,23 @@ using System;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Text;
 
-namespace JBTExport
+namespace Deploiement
 {
     /// <summary>
-    /// Pose, au premier lancement, un raccourci vers l'application sur le bureau de l'utilisateur.
+    /// Pose un raccourci vers l'application sur le bureau de l'utilisateur, s'il n'y est pas.
     /// </summary>
     /// <remarks>
-    /// MSIX ne sait pas créer de raccourci sur le bureau : le manifeste n'a aucun élément pour cela,
-    /// et une application empaquetée n'apparaît que dans le menu Démarrer. C'est donc à
-    /// l'application, qui tourne en runFullTrust, de s'en charger.
+    /// À n'utiliser que si le programme d'installation ne s'en charge pas déjà. Inno Setup pose le
+    /// raccourci nativement, à l'installation, et le retire à la désinstallation — c'est mieux fait
+    /// que depuis l'application. Cette classe reste utile quand l'application est déployée
+    /// autrement : copie de dossier, script de session, ancien poste rattrapé à la main.
     ///
-    /// Le raccourci ne vise pas l'exécutable — son chemin sous WindowsApps porte le numéro de
-    /// version et change donc à chaque mise à jour — mais l'entrée de l'application dans le shell,
-    /// « shell:AppsFolder » suivi de son identifiant. C'est ce que produit le « Créer un raccourci »
-    /// manuel, et il survit aux mises à jour.
-    ///
-    /// Ce fichier est volontairement autonome et dupliqué à l'identique dans JBT-PDFViewer : les deux
-    /// applications n'ont aucune bibliothèque commune, et l'introduire pour trente lignes coûterait
-    /// plus qu'elle ne rapporterait.
+    /// La cible est le chemin de l'exécutable en cours, et non un chemin écrit en dur : c'est le bon
+    /// chemin par construction, et il n'y a rien à tenir à jour si le dossier d'installation change.
     /// </remarks>
     internal static class RaccourciBureau
     {
-        // GetCurrentPackageFamilyName renvoie ce code hors paquet : il sert donc aussi à savoir si
-        // l'application tourne empaquetée, sans dépendance supplémentaire.
-        private const int APPMODEL_ERROR_NO_PACKAGE = 15700;
-        private const int ERROR_INSUFFICIENT_BUFFER = 122;
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
-        private static extern int GetCurrentPackageFamilyName(ref int longueur, StringBuilder nom);
-
         /// <summary>
         /// Crée le raccourci du bureau s'il n'existe pas et qu'il n'a jamais été posé.
         /// </summary>
@@ -48,8 +34,8 @@ namespace JBTExport
         {
             try
             {
-                string famille = LireFamilleDePaquet();
-                if (famille == null) return;
+                string executable = Assembly.GetEntryAssembly()?.Location;
+                if (string.IsNullOrEmpty(executable) || !EstInstallee(executable)) return;
 
                 string marqueur = Path.Combine(dossierMarqueur, "raccourci_bureau.txt");
                 if (File.Exists(marqueur)) return;
@@ -59,7 +45,7 @@ namespace JBTExport
 
                 if (!File.Exists(chemin))
                 {
-                    Ecrire(chemin, "shell:AppsFolder\\" + famille + "!App", nomRaccourci);
+                    Ecrire(chemin, executable, nomRaccourci);
                 }
 
                 Directory.CreateDirectory(dossierMarqueur);
@@ -73,22 +59,20 @@ namespace JBTExport
         }
 
         /// <summary>
-        /// Nom de famille du paquet MSIX courant, ou <c>null</c> si l'application n'est pas empaquetée.
+        /// Vrai lorsque l'exécutable tourne depuis son dossier d'installation, et non depuis un
+        /// dossier de compilation.
         /// </summary>
-        private static string LireFamilleDePaquet()
+        /// <remarks>
+        /// Sans ce garde-fou, chaque exécution depuis Visual Studio poserait sur le bureau un
+        /// raccourci vers bin\Debug.
+        /// </remarks>
+        private static bool EstInstallee(string executable)
         {
-            int longueur = 0;
+            string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            if (string.IsNullOrEmpty(local)) return false;
 
-            // Premier appel avec un tampon vide : l'API renvoie la taille nécessaire, ou signale
-            // qu'il n'y a pas de paquet du tout — c'est le cas au débogage depuis Visual Studio.
-            int resultat = GetCurrentPackageFamilyName(ref longueur, null);
-            if (resultat == APPMODEL_ERROR_NO_PACKAGE) return null;
-            if (resultat != ERROR_INSUFFICIENT_BUFFER) return null;
-
-            StringBuilder tampon = new StringBuilder(longueur);
-            resultat = GetCurrentPackageFamilyName(ref longueur, tampon);
-
-            return resultat == 0 ? tampon.ToString() : null;
+            return Path.GetFullPath(executable)
+                .StartsWith(Path.GetFullPath(local), StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
@@ -111,9 +95,10 @@ namespace JBTExport
 
                 Type typeRaccourci = raccourci.GetType();
 
-                // Aucune icône à préciser : le lien vers l'entrée du shell porte déjà celle du paquet.
                 typeRaccourci.InvokeMember("TargetPath", BindingFlags.SetProperty,
                     null, raccourci, new object[] { cible });
+                typeRaccourci.InvokeMember("WorkingDirectory", BindingFlags.SetProperty,
+                    null, raccourci, new object[] { Path.GetDirectoryName(cible) });
                 typeRaccourci.InvokeMember("Description", BindingFlags.SetProperty,
                     null, raccourci, new object[] { description });
                 typeRaccourci.InvokeMember("Save", BindingFlags.InvokeMethod,

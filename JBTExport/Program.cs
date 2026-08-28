@@ -9,8 +9,12 @@ using OutilsTs;
 using System.IO;
 using System.Windows.Forms;
 using System.Diagnostics;
-using System.Deployment.Application;
+using System.Net;
+using System.Net.Cache;
+using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Xml.Serialization;
+using AutoUpdaterDotNET;
 
 
 
@@ -25,105 +29,14 @@ namespace JBTExport
             string fichierConfig = Path.Combine(dossierConfig, "config.txt");
             string path = string.Empty;
 
-            // MSIX n'installe que l'entrée du menu Démarrer : le raccourci du bureau, l'application
-            // doit se le poser elle-même, une seule fois.
-            RaccourciBureau.CreerSiAbsent("JBTExport", dossierConfig);
+            // Filet de sécurité : le programme d'installation pose déjà ce raccourci, sous le même
+            // nom. L'appel ne sert donc que pour un poste rattrapé autrement — copie de dossier,
+            // script de session — et ne fait rien quand le setup est passé avant.
+            Deploiement.RaccourciBureau.CreerSiAbsent("JBTExport", dossierConfig);
 
-            if (ApplicationDeployment.IsNetworkDeployed)
-            {
-                var ad = ApplicationDeployment.CurrentDeployment;
-
-                // Détecte si c'est le tout premier démarrage après l'installation ou une mise à jour
-                if (ad.IsFirstRun)
-                {
-                    try
-                    {
-                        // 1. On s'assure que le dossier de config existe
-                        if (!Directory.Exists(dossierConfig))
-                        {
-                            Directory.CreateDirectory(dossierConfig);
-                        }
-
-                        // 2. Si le fichier existe déjà, on tente de lire le chemin
-                        if (File.Exists(fichierConfig))
-                        {
-                            path = File.ReadAllText(fichierConfig).Trim();
-                        }
-
-                        // 3. Si le chemin est vide ou n'existe pas physiquement sur le disque
-                        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
-                        {
-                            MessageBox.Show(
-                                "Aucun dossier d'exportation valide n'est configuré.\n\nVeuillez sélectionner le dossier d'exportation par défaut dans la fenêtre qui va suivre.",
-                                "Configuration du chemin d'export",
-                                MessageBoxButtons.OK,
-                                MessageBoxIcon.Information
-                            );
-
-                            // 🔑 Utilisation de FolderBrowserDialog pour ouvrir l'explorateur Windows
-                            using (var fbd = new FolderBrowserDialog())
-                            {
-                                fbd.Description = "Sélectionnez le dossier d'exportation par défaut pour JBT-Export";
-                                fbd.ShowNewFolderButton = true;
-
-                                if (fbd.ShowDialog() == DialogResult.OK)
-                                {
-                                    // 🔑 1. On récupère le chemin sélectionné (potentiellement "Z:\mon\dossier")
-                                    string cheminSelectionne = fbd.SelectedPath;
-
-                                    // 🔑 2. On le convertit en UNC s'il s'agit d'un lecteur réseau (ex: "\\serveur\partage\mon\dossier")
-                                    path = ObtenirCheminUNC(cheminSelectionne);
-
-                                    // On sauvegarde le chemin UNC dans le fichier texte
-                                    File.WriteAllText(fichierConfig, path);
-
-                                    MessageBox.Show(
-                                        $"Configuration enregistrée avec succès !\n\nChemin réel sauvegardé :\n{path}",
-                                        "Configuration réussie",
-                                        MessageBoxButtons.OK,
-                                        MessageBoxIcon.Information
-                                    );
-                                }
-                                else
-                                {
-                                    MessageBox.Show(
-                                        "L'exportation a été annulée car aucun dossier n'a été sélectionné.",
-                                        "Export annulé",
-                                        MessageBoxButtons.OK,
-                                        MessageBoxIcon.Warning
-                                    );
-                                    return;
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"Erreur lors de la configuration du chemin : {ex.Message}", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        return;
-                    }
-
-                    // Sécurité pour s'assurer que le chemin d'export se termine bien par un '\'
-                    if (!path.EndsWith("\\"))
-                    {
-                        path += "\\";
-                    }
-
-                    Console.WriteLine($"Le chemin d'exportation utilisé est : {path}");
-
-                    MessageBox.Show(
-                        "JBTExport a été installé avec succès !",
-                        "Installation terminée",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information
-                    );
-
-                    // On ferme proprement l'application immédiatement
-                    Environment.Exit(0);
-                }
-            }
-
-           
+            // Contrôle de version avant tout : un poste en retard ne doit pas exporter avec un
+            // format que les autres ne relisent pas.
+            if (!PeutDemarrer()) return;
 
             try
             {
@@ -276,6 +189,98 @@ namespace JBTExport
             TSH.Disconnect();
             Application.Exit();
 
+        }
+
+        /// <summary>Adresse du descripteur de mise à jour, sur le partage réseau.</summary>
+        /// <remarks>
+        /// Chemin UNC et non une lettre de lecteur : un mappage est propre à la session, et sur un
+        /// poste où il manque les mises à jour cesseraient sans que personne ne s'en aperçoive.
+        /// </remarks>
+        private const string DescripteurMiseAJour =
+            @"\\jbtec-be\meca$\topsolid\JBTExport\update.xml";
+
+        /// <summary>
+        /// Indique si l'application est autorisée à démarrer, après contrôle de sa version.
+        /// </summary>
+        /// <remarks>
+        /// La mise à jour peut être refusée, mais l'application ne démarre pas tant qu'elle n'est
+        /// pas faite : tous les postes doivent produire des liasses au même format.
+        ///
+        /// Le contrôle est fait ici, avant toute fenêtre, et non par AutoUpdater.Start : celui-ci
+        /// mène le déroulé de bout en bout et ne dit pas si l'utilisateur a refusé. Ses boîtes de
+        /// dialogue s'affichent très bien sans boucle de messages, elles pompent la leur.
+        /// </remarks>
+        private static bool PeutDemarrer()
+        {
+            UpdateInfoEventArgs descripteur;
+
+            try
+            {
+                descripteur = LireDescripteurMiseAJour();
+            }
+            catch (Exception ex)
+            {
+                // Partage injoignable, poste hors réseau : on laisse travailler plutôt que
+                // d'immobiliser. Ne pas savoir n'est pas la même chose que savoir qu'une version
+                // manque.
+                Console.WriteLine($"[Mise à jour] Vérification impossible : {ex.Message}");
+                return true;
+            }
+
+            Version installee = Assembly.GetExecutingAssembly().GetName().Version;
+            if (descripteur == null || string.IsNullOrWhiteSpace(descripteur.CurrentVersion)) return true;
+            if (new Version(descripteur.CurrentVersion) <= installee) return true;
+
+            DialogResult reponse = MessageBox.Show(
+                $"La version {descripteur.CurrentVersion} est disponible ; ce poste utilise la {installee}.\n\n"
+                + "JBTExport ne peut pas s'ouvrir tant que la mise à jour n'est pas faite.",
+                "Mise à jour requise",
+                MessageBoxButtons.OKCancel,
+                MessageBoxIcon.Information);
+
+            if (reponse != DialogResult.OK)
+            {
+                Console.WriteLine("[Mise à jour] Refusée : l'application ne démarre pas.");
+                return false;
+            }
+
+            // L'installation se fait par utilisateur, dans %LOCALAPPDATA% : aucune élévation n'est
+            // nécessaire. Sans ce réglage, AutoUpdater lance le programme d'installation avec le
+            // verbe « runas » et déclenche une invite UAC pour rien.
+            AutoUpdater.RunUpdateAsAdmin = false;
+
+            // Rend la main une fois le programme d'installation lancé : celui-ci remplace les
+            // fichiers puis relance l'application.
+            if (AutoUpdater.DownloadUpdate(descripteur)) return false;
+
+            MessageBox.Show(
+                "Le téléchargement de la mise à jour n'a pas abouti.\n\n"
+                + "Vérifiez l'accès au réseau, puis relancez JBTExport.",
+                "Mise à jour",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            return false;
+        }
+
+        /// <summary>
+        /// Lit le descripteur publié sur le partage.
+        /// </summary>
+        private static UpdateInfoEventArgs LireDescripteurMiseAJour()
+        {
+            using (WebClient client = new WebClient())
+            {
+                // Sans cela, un update.xml fraîchement publié peut rester masqué par le cache.
+                client.CachePolicy = new RequestCachePolicy(RequestCacheLevel.NoCacheNoStore);
+
+                string xml = client.DownloadString(new Uri(DescripteurMiseAJour));
+
+                XmlSerializer serialiseur = new XmlSerializer(typeof(UpdateInfoEventArgs));
+                using (StringReader lecteur = new StringReader(xml))
+                {
+                    return (UpdateInfoEventArgs)serialiseur.Deserialize(lecteur);
+                }
+            }
         }
 
         private static string TrouverIndiceRecurssif(PdmObjectId elementId, string projectName, out string indiceOwnerName, PdmObjectId premierParentId = default(PdmObjectId), string premierParentName = null)
