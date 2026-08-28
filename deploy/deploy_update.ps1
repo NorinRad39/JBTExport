@@ -96,10 +96,61 @@ $ErrorActionPreference = 'Stop'
 # Outils
 # ---------------------------------------------------------------------------------------------
 
+function Resolve-ExpressionInno {
+    <#
+        Évalue une expression ISPP simple : des littéraux entre guillemets et des noms déjà définis,
+        assemblés par « + ».
+
+        C'est ce qui permet à un fichier de configuration de ne nommer l'application qu'une fois et
+        d'en dériver le reste. Sans cela, chaque valeur répète le nom et une copie d'un projet à
+        l'autre en oublie toujours une.
+
+        Renvoie $null sur une expression qu'on ne sait pas évaluer : mieux vaut ignorer la propriété
+        que d'en deviner la valeur.
+    #>
+    param(
+        [Parameter(Mandatory = $true)][string]$Expression,
+        [Parameter(Mandatory = $true)][hashtable]$DejaDefinies
+    )
+
+    $morceaux = New-Object System.Collections.Generic.List[string]
+    $courant = ''
+    $dansGuillemets = $false
+
+    foreach ($caractere in $Expression.ToCharArray()) {
+        if ($caractere -eq '"') {
+            $dansGuillemets = -not $dansGuillemets
+            $courant += $caractere
+            continue
+        }
+        # Un « + » entre guillemets appartient au texte, pas à l'expression.
+        if ($caractere -eq '+' -and -not $dansGuillemets) {
+            $morceaux.Add($courant)
+            $courant = ''
+            continue
+        }
+        $courant += $caractere
+    }
+    $morceaux.Add($courant)
+
+    $resultat = ''
+    foreach ($morceau in $morceaux) {
+        $terme = $morceau.Trim()
+        if ($terme -match '^"(.*)"$') { $resultat += $Matches[1]; continue }
+        if ($DejaDefinies.ContainsKey($terme)) { $resultat += $DejaDefinies[$terme]; continue }
+        return $null
+    }
+
+    return $resultat
+}
+
 function Get-ProprietesInno {
     <#
         Lit les #define du fichier de configuration Inno. C'est ce qui permet au .iss et à ce script
         de partager une seule source de vérité, au lieu de répéter les mêmes chemins des deux côtés.
+
+        Les définitions sont lues dans l'ordre du fichier : une valeur peut donc s'appuyer sur celles
+        déclarées au-dessus d'elle, exactement comme le fait le préprocesseur d'Inno.
     #>
     param([Parameter(Mandatory = $true)][string]$Chemin)
 
@@ -109,8 +160,11 @@ function Get-ProprietesInno {
         $texte = $ligne.Trim()
         if ($texte.StartsWith(';')) { continue }
 
-        $trouve = [regex]::Match($texte, '^#define\s+(\w+)\s+"(.*)"\s*$')
-        if ($trouve.Success) { $proprietes[$trouve.Groups[1].Value] = $trouve.Groups[2].Value }
+        $trouve = [regex]::Match($texte, '^#define\s+(\w+)\s+(.+?)\s*$')
+        if (-not $trouve.Success) { continue }
+
+        $valeur = Resolve-ExpressionInno -Expression $trouve.Groups[2].Value -DejaDefinies $proprietes
+        if ($null -ne $valeur) { $proprietes[$trouve.Groups[1].Value] = $valeur }
     }
 
     return $proprietes
