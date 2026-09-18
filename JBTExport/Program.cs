@@ -125,12 +125,53 @@ namespace JBTExport
 
             var currentDoc = new Document();
 
-            if(currentDoc == null || currentDoc.DocId == DocumentId.Empty)
+            if (EstLiasseOuPlan(currentDoc))
             {
-                MessageBox.Show("Aucun document ouvert dans TopSolid.", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
+                ExporterLiasseOuPlan(currentDoc, path);
+            }
+            else
+            {
+                CreerLienExcel(path);
             }
 
+            TSH.Disconnect();
+            Application.Exit();
+
+        }
+
+        /// <summary>Extensions PDM (valeurs de <see cref="Document.DocExtention"/>) qui déclenchent l'export .jbt.</summary>
+        /// <remarks>
+        /// TSH.Pdm.GetType renvoie un type PDM (voir Outils.cs, ex. "TopSolidPart"), pas forcément
+        /// l'extension de fichier avec un point comme on la voit sur le disque. Valeurs à confirmer
+        /// une fois sur un poste avec TopSolid ouvert (liasse puis plan) avant mise en production :
+        /// un point d'arrêt sur <see cref="EstLiasseOuPlan"/> ou un Console.WriteLine(currentDoc.DocExtention)
+        /// donnera la valeur réelle à comparer à ces constantes, à ajuster si besoin.
+        /// </remarks>
+        private static readonly string[] ExtensionsExport = { "TopDftBdl", "TopDft" };
+
+        /// <summary>
+        /// Indique si le document actif doit suivre le flux d'export .jbt existant.
+        /// </summary>
+        /// <remarks>
+        /// Tout le reste (rien d'ouvert dans TopSolid, ou un document d'un autre type comme une
+        /// pièce 3D) bascule sur la création de lien SharePoint : c'est le choix retenu plutôt que
+        /// de ne réagir qu'à "rien d'ouvert", pour couvrir aussi le cas où l'utilisateur veut créer
+        /// un lien alors qu'il a une pièce ouverte pour autre chose.
+        /// </remarks>
+        private static bool EstLiasseOuPlan(Document doc)
+        {
+            if (doc == null || doc.DocId == DocumentId.Empty) return false;
+
+            string extension = (doc.DocExtention ?? string.Empty).TrimStart('.');
+            return ExtensionsExport.Any(candidate => string.Equals(candidate, extension, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Exporte la liasse ou le plan actif en .jbt sur le dossier atelier correspondant.
+        /// </summary>
+        /// <remarks>Comportement inchangé, seulement extrait de Main pour cohabiter avec CreerLienExcel.</remarks>
+        private static void ExporterLiasseOuPlan(Document currentDoc, string path)
+        {
             var currentProjetName = PDM.GetCurrentProjectName();
             string dossierAtelier = TrouverDossierAtelier(currentDoc.DocPdmObject);
 
@@ -199,10 +240,73 @@ namespace JBTExport
             {
                 MessageBox.Show($"Erreur inattendue pendant l'export : {ex.Message}", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
 
-            TSH.Disconnect();
-            Application.Exit();
+        /// <summary>
+        /// Fait choisir une pièce dans le PDM puis crée, dans le même dossier atelier que l'export,
+        /// un raccourci .url ouvrant le classeur Excel SharePoint correspondant en coédition Bureau.
+        /// </summary>
+        private static void CreerLienExcel(string path)
+        {
+            using (var picker = new PickerForm())
+            {
+                if (picker.ShowDialog() != DialogResult.OK) return;
 
+                PdmObjectId pieceId = picker.SelectedPdmObjectId;
+                string urlSharePoint = picker.UrlSharePoint;
+
+                var currentProjetName = PDM.GetCurrentProjectName();
+                string dossierAtelier = TrouverDossierAtelier(pieceId);
+
+                if (string.IsNullOrEmpty(dossierAtelier))
+                {
+                    dossierAtelier = NomDossierParent(pieceId);
+                    Console.WriteLine($"[Chemin] Dossier \"{DossierRacineAtelier}\" introuvable en remontant le PDM ; dossier parent utilisé : {dossierAtelier}");
+                }
+
+                try
+                {
+                    string dossierExportCible = Path.Combine(
+                        path,
+                        NettoyerNomDossier(currentProjetName),
+                        dossierAtelier);
+
+                    // Même règle que l'export : JBTExport est déjà l'autorité sur ce dossier, donc
+                    // le créer ici s'il manque encore ne risque pas de produire un doublon.
+                    if (!Directory.Exists(dossierExportCible))
+                    {
+                        Directory.CreateDirectory(dossierExportCible);
+                        Console.WriteLine($"Dossier créé : {dossierExportCible}");
+                    }
+
+                    string nomPiece = NettoyerNomDossier(TSH.Pdm.GetName(pieceId));
+                    string fichierUrl = Path.Combine(dossierExportCible, nomPiece + ".url");
+
+                    if (File.Exists(fichierUrl))
+                    {
+                        DialogResult reponse = MessageBox.Show(
+                            $"Un lien existe déjà pour \"{nomPiece}\".\n\nLe remplacer ?",
+                            "Lien déjà existant",
+                            MessageBoxButtons.YesNo,
+                            MessageBoxIcon.Question);
+
+                        if (reponse != DialogResult.Yes) return;
+                    }
+
+                    // ms-excel:ofe|u| est le protocole Office qui ouvre directement Excel Bureau en
+                    // coédition sur le document distant, au lieu de retomber sur Excel Online.
+                    string contenu = "[InternetShortcut]" + Environment.NewLine
+                        + "URL=ms-excel:ofe|u|" + urlSharePoint;
+
+                    File.WriteAllText(fichierUrl, contenu);
+
+                    MessageBox.Show("Lien SharePoint créé avec succès.", "Succès", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Erreur lors de la création du lien : {ex.Message}", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
         }
 
         /// <summary>Adresse du descripteur de mise à jour, sur le partage réseau.</summary>

@@ -150,6 +150,7 @@
       <HintPath>..\packages\System.Threading.Tasks.Extensions.4.6.3\lib\net462\System.Threading.Tasks.Extensions.dll</HintPath>
     </Reference>
     <Reference Include="System.ValueTuple" />
+    <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
@@ -164,6 +165,12 @@
   <ItemGroup>
     <Compile Include="ConfigSignets.cs" />
     <Compile Include="Detector.cs" />
+    <Compile Include="PickerForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="PickerForm.Designer.cs">
+      <DependentUpon>PickerForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="RaccourciBureau.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
