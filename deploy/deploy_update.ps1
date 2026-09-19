@@ -228,6 +228,59 @@ function Get-CheminSigntool {
     return $null
 }
 
+function New-CertificatDeSignature {
+    <#
+        Crée un certificat de signature de code auto-signé et l'exporte en .pfx (clé privée) et .cer
+        (partie publique). Appelée une seule fois, au premier déploiement qui demande une signature :
+        les suivants trouvent le .pfx déjà en place et n'en régénèrent jamais un second.
+
+        Régénérer à chaque publication casserait justement ce que le certificat apporte : Windows
+        reconnaît un certificat par son empreinte, pas par son nom. Un nouveau certificat à chaque
+        déploiement, et chaque poste redeviendrait « éditeur inconnu » à la mise à jour suivante --
+        l'inverse du but recherché. D'où l'appel conditionné, plus haut, à l'absence du .pfx.
+
+        Le Subject porte le nom de l'éditeur, pas celui de l'application : c'est la même personne qui
+        signe tous ses outils. Rien n'empêche de partager un seul certificat entre plusieurs
+        applications ; ce script en crée un par projet par simplicité, au prix d'un magasin
+        TrustedPublisher qui en accumule un par outil installé sur chaque poste.
+
+        Le .pfx est exporté SANS mot de passe : Export-PfxCertificate exige une SecureString non vide,
+        d'où l'appel direct à X509Certificate2.Export -- seule façon d'obtenir un .pfx que signtool
+        relit sans qu'aucun secret ne transite nulle part dans ce script.
+    #>
+    param(
+        [Parameter(Mandatory = $true)][string]$CheminPfx,
+        [Parameter(Mandatory = $true)][string]$CheminCer,
+        [Parameter(Mandatory = $true)][string]$Editeur
+    )
+
+    Write-Host ""
+    Write-Host "Certificat  : absent -- génération d'un nouveau certificat de signature (CN=$Editeur)..." -ForegroundColor Yellow
+
+    $certificat = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=$Editeur" `
+        -KeyAlgorithm RSA -KeyLength 2048 -NotAfter (Get-Date).AddDays(365) `
+        -CertStoreLocation Cert:\CurrentUser\My
+
+    try {
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $CheminPfx) | Out-Null
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $CheminCer) | Out-Null
+
+        $octetsPfx = $certificat.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx, '')
+        [System.IO.File]::WriteAllBytes($CheminPfx, $octetsPfx)
+        Export-Certificate -Cert $certificat -FilePath $CheminCer | Out-Null
+
+        Write-Host "Certificat  : créé, valable jusqu'au $($certificat.NotAfter.ToString('dd/MM/yyyy'))." -ForegroundColor Yellow
+        Write-Host "              $CheminPfx (privé -- ne pas committer)" -ForegroundColor DarkGray
+        Write-Host "              $CheminCer (public -- à committer, déposé sur les postes à l'installation)" -ForegroundColor DarkGray
+        Write-Host ""
+    }
+    finally {
+        # Les deux fichiers exportés suffisent : le magasin utilisateur ne doit pas accumuler une
+        # clé par projet signé depuis ce poste.
+        Remove-Item "Cert:\CurrentUser\My\$($certificat.Thumbprint)" -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Get-CheminMSBuild {
     <#
         vswhere.exe est installé à un emplacement fixe par tous les Visual Studio depuis 2017, quelle
@@ -476,6 +529,19 @@ try {
         if (-not [System.IO.Path]::IsPathRooted($CertificateFile)) {
             $CertificateFile = Join-Path $dossierScript $CertificateFile
         }
+    }
+
+    # Premier déploiement signé de ce projet : le .pfx n'existe pas encore sur ce poste. Plutôt
+    # que d'exiger une manipulation à part avant de pouvoir publier, on le génère ici -- jamais en
+    # silence, le certificat est annoncé à l'écran comme le sont la version ou le chemin MSBuild.
+    if ($CertificateFile -and -not (Test-Path -LiteralPath $CertificateFile) -and $config.ContainsKey('CertFile')) {
+        $cheminCertFile = $config['CertFile']
+        if (-not [System.IO.Path]::IsPathRooted($cheminCertFile)) {
+            $cheminCertFile = Join-Path $dossierScript $cheminCertFile
+        }
+
+        New-CertificatDeSignature -CheminPfx $CertificateFile -CheminCer $cheminCertFile `
+            -Editeur $config['AppPublisher']
     }
 
     if ($CertificateFile -and (Test-Path -LiteralPath $CertificateFile)) {
