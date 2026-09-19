@@ -1,0 +1,37 @@
+## WORKSPACE EXECUTIVE SUMMARY (YAML)
+# Generated: 2026-09-08T21:30:49.1159202+02:00
+# Root: D:\Code\source\repos\NorinRad39\JBTExport
+Architecture:
+  Type: Backend (C#/.NET)
+  Scale: 12 relevant source files
+  Components: 0
+  Controllers: 0
+  Models: 0
+  Services: 0
+---
+- File: JBTExport\JBTExport.csproj
+  Preview: "<?xml version='1.0' encoding='utf-8'?> <Project ToolsVersion='15.0' xmlns='http://schemas.microsoft.com/developer/msbuild/2003'>  <Import Project='$(M..."
+- File: JBTExport.slnx
+  Preview: "<Solution>  <Configurations>   <Platform Name='Any CPU' />   <Platform Name='ARM' />   <Platform Name='ARM64' />   <Platform Name='x64' />   <Platform..."
+- File: .vscode\settings.json
+  Preview: "{   'dotnet.preferCSharpExtension': true }"
+- File: deploy\deploy_update.ps1
+  Preview: "<# .SYNOPSIS   Compile une application, fabrique son programme d'installation Inno Setup et le publie sur un   partage réseau avec le fichier update.x..."
+- File: JBTExport\ConfigSignets.cs
+  Symbols: [ConfigSignets]
+  Preview: "using System.Collections.Generic; namespace JBTExport {   internal static class ConfigSignets   {     // liste de mots-clés à détecter au centre de la..."
+- File: JBTExport\Detector.cs
+  Preview: "using System; using System.Collections.Generic; using iText.Kernel.Geom; using iText.Kernel.Pdf.Canvas.Parser; using iText.Kernel.Pdf.Canvas.Parser.Da..."
+- File: JBTExport\Program.cs
+  Preview: "using System; using System.Collections.Generic; using System.Linq; using System.Text; using System.Threading.Tasks; using TopSolid.Kernel.Automating; ..."
+- File: JBTExport\RaccourciBureau.cs
+  Preview: "using System; using System.IO; using System.Reflection; using System.Runtime.InteropServices; namespace Deploiement {   /// <summary>   /// Pose un ra..."
+- File: JBTExport\Signets.cs
+  Symbols: [Signets]
+  Preview: "using iText.Kernel.Pdf; using iText.Kernel.Pdf.Canvas.Parser; using iText.Kernel.Pdf.Navigation; using System; using System.Collections.Generic; using..."
+- File: JBTExport.Package\deploy_update.ps1
+  Preview: "<# .SYNOPSIS   Publie un projet de packaging MSIX (.wapproj) et met le paquet à disposition sur un partage   réseau au moyen d'un fichier .appinstalle..."
+- File: JBTExport\.vscode\settings.json
+  Preview: "{   'dotnet.preferCSharpExtension': true }"
+- File: JBTExport\Properties\AssemblyInfo.cs
+  Preview: "using System.Reflection; using System.Runtime.CompilerServices; using System.Runtime.InteropServices; // Les informations générales relatives à un ass..."
